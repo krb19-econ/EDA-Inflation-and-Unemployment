@@ -11,12 +11,12 @@ Area:	U.S. city average
 Item:	All items  
 Base Period:	1982-84=100  
 Years:	2000 to 2021  
-
+  
 Unemployment  
-Series Id:	LNS14000000  				
-Seasonally Adjusted			  		
-Series title:	(Seas) Unemployment Rate  				
-Labor force status:	Unemployment rate		  		
-Type of data:	Percent or rate				  
-Age:	16 years and over				  
-Years:	2000 to 2021			  
+Series Id:	LNS14000000  
+Seasonally Adjusted  
+Series title:	(Seas) Unemployment Rate  
+Labor force status:	Unemployment rate  
+Type of data:	Percent or rate  
+Age:	16 years and over  
+Years:	2000 to 2021    
