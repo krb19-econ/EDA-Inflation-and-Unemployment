@@ -5,7 +5,7 @@ Data obtained from Bureau of Labor Statistics
   
 Inflation  
 Series Id:	CUUR0000SA0			  	
-Not Seasonally Adjusted					
+Not Seasonally Adjusted		  			
 Series Title:	All items in U.S. city average, all urban consumers, not seasonally adjusted  				
 Area:	U.S. city average				  
 Item:	All items				  
