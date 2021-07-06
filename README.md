@@ -4,9 +4,9 @@ Explanatory Data Analysis of US inflation and Unemployment for the period 2000-2
 Data obtained from Bureau of Labor Statistics  
   
 Inflation  
-Series Id:	CUUR0000SA0			  	
-Not Seasonally Adjusted		  			
-Series Title:	All items in U.S. city average, all urban consumers, not seasonally adjusted  				
+Series Id:	CUUR0000SA0  			  	
+Not Seasonally Adjusted  		  			
+Series Title:	All items in U.S. city average, all urban consumers, not seasonally adjusted    				
 Area:	U.S. city average				  
 Item:	All items				  
 Base Period:	1982-84=100  				
