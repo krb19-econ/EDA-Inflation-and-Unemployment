@@ -1,153 +1,255 @@
-library(astsa)
-library(tseries)
-library(tidyverse)
-library(forecast)
-library(lmtest)
+library(ggplot2)
+library(rio)
 library(readxl)
+library(zoo)
+library(forecast)
+library(DataExplorer)
+library(tidyverse)
+library(tseries)
+library(tidyr)
 
-Inflation <- read_excel("C:/Users/Administrator/Desktop/Project_TS/Inflation.xlsx")
-Unemployment <- read_excel("C:/Users/Administrator/Desktop/Project_TS/Unemployment.xlsx")
+unemployment <- read_excel("C:/Users/Administrator/Desktop/Inflation and Unemployment/unemp.xlsx")
 
+inflation <- read_excel("C:/Users/Administrator/Desktop/Inflation and Unemployment/inf.xlsx")
 
-df_inf <- Inflation
-df_unemp <- Unemployment
-
-rm(Unemployment)
-rm(Inflation)
-
-View(df_inf)
-View(df_unemp)
-
-#One clear issue is that inflation is not taken as rates, but rather as CPI.
-#So we need to convert it into rates
-
-#Will also need to convert them into time series objects
-#First convert year column into the row names
-
-df_inf <- as.matrix(df_inf)
-rownames(df_inf) <- df_inf[,1]
-df_inf <- subset(df_inf, select = -Year)
-
-vec_inf <- as.vector(t(df_inf))
-vec_inf
-
-ts_cpi <- ts(vec_inf, start = c(2000,1), end =c(2021,4) , frequency = 12)
+#Transforming into long format
 
 
-#Now to obtain inflation rates
-df_inf2 <- as.data.frame(vec_inf)
-df_inf2 <- df_inf2 %>% dplyr::mutate((pct_change = vec_inf/lag(vec_inf) - 1) * 100)
+df <- unemployment %>% tidyr::gather(year, unemp, -month)
 
-#Converting new vector of inflation into time series
-ts_inf<- ts(df_inf2$`(pct_change = vec_inf/lag(vec_inf) - 1) * 100`, start = c(2000,1), end =c(2021,4) , frequency = 12)
-ts_inf <- na.remove(ts_inf)
+df1 <- inflation %>% tidyr::gather(year, value , -month)
 
+df$cpi <- df1[3]
 
+rm(df1)
+#To get the inflation rates 
+vec_cpi <- as.vector(as.matrix(df$cpi))
+df2 <- as.data.frame(vec_cpi)
+df2 <- df2 %>% dplyr::mutate(rate = ((vec_cpi/dplyr::lag(vec_cpi)) - 1) * 100)
 
-#Similarly with unemployment data
-df_unemp <- as.matrix(df_unemp)
-rownames(df_unemp) <- df_unemp[,1]
-df_unemp <- subset(df_unemp, select = -Year)
+df$inf <- df2[2]
 
-vec_unemp <- as.vector(t(df_unemp))
-vec_unemp
-
-
-ts_unemp <- ts(vec_unemp, start = c(2000,1), end =c(2021,4) , frequency = 12)
-ts_unemp <- na.remove(ts_unemp)
-ts_unemp
+rm(df2)
+rm(vec_cpi)
 
 
+#Creating EDA Report
+df %>% DataExplorer::create_report(
+  output_file = 'inf_unemp_eda_report',
+  output_dir = "C:/Users/Administrator/Desktop/Inflation and Unemployment",
+  report_title = 'EDA Report - US Inflation and Unemployment Rates'
+)
+
+str(df)
+#It is a tibble. Convert into dataframe
+data1 <- data.frame(df)
+
+str(data1)
+
+summary(data1)
 
 
-#PLOTS
+#EDA CPI
 
-#CPI
-plot.ts(ts_cpi, main = "CPI (base '84)")
-plot.ts(ts_inf, main = 'Inflation Rates')
-plot.ts(ts_unemp, main = 'Unemployment Rates')
-
-#Combined 
-plot.ts(cbind(ts_inf,ts_unemp), plot.type = "single", col = c('blue', 'red'))
+#Now create a time series
+cpi <- ts(data1$cpi, start = c(2000,1), end = c(2021,4), frequency = 12)
 
 
+#Graphs - CPI
+plot.ts(cpi)
 
+#Will now create a yearly moving average
 
+data1$cpi_ma_year <- ma(data1$cpi, order = 12)
 
-#SEASONAL PLOTS
-ggseasonplot(ts_inf)
-ggseasonplot(ts_unemp)
+#Make a time series for the moving average also
+cpi_ma <- ts(data1$cpi_ma_year, start = c(2000,1), end = c(2021,4), frequency = 12)
 
-#Can also do
-ggseasonplot(ts_inf, polar = T)
+plot.ts(cpi_ma)
+
+#Plotting them together
+
+plot.ts(cbind(cpi,cpi_ma), plot.type = 'single', col = c('red','blue'))
+legend('topleft', legend = c('CPI', 'CPI_Yearly MA'),
+       col = c('red','blue'), lty = 1 )
 
 
 
+#Decomposition of CPI
 
-#SCATTERPLOTS
-plot(x = ts_unemp, y = ts_inf)
+decomp = stl(cpi, "periodic")
+#Also take the deseasonalised dara
+deseason_cpi <- seasadj(decomp)
+
+plot(decomp)
+plot(stl(deseason_cpi,"periodic"))
+
+#However we can't be sure of the share in explanation in differences
+#The bars on the right do that. Trend accounts for almost all the variation
+
+apply(stl(cpi, 'periodic')$time, 2, var)/var(cpi)
+#0.99 explained by trend
+
+#Doing the same for deseasonalised data
+apply(stl(deseason_cpi, 'periodic')$time, 2, var)/var(deseason_cpi)
+#Again most of it is explained by the trend
+
 
 
 
 #STATIONARITY
+adf.test(cpi)
 
-tseries::adf.test(ts_inf)#ADF TEST
-tseries::adf.test(ts_inf, k =0)#DF TEST
-tseries::pp.test(ts_inf)#PP TEST
+#Will need to perform differencing 
+cpi_diff1 <- diff(cpi, differences = 1)
+cpi_diff1
+adf.test(cpi_diff1)
 
-#Rejected in all tests. INF is stationary
+#For thew deasonalised data
+adf.test(deseason_cpi)
 
-tseries::adf.test(ts_unemp)#ADF TEST
-tseries::adf.test(ts_unemp, k =0)#DF TEST
-tseries::pp.test(ts_unemp)#PP TEST
-#Not rejected. Need to make unemployment data stationary
+cpi_deseas_diff <- diff(deseason_cpi, differences = 1)
 
-#Converting into stationary time series
-diff_unemp <- ts(as.vector(ts_unemp) - lag(as.vector(ts_unemp)),
-               start = c(2000,1), end =c(2021,4) , frequency = 12)
-diff_unemp <- na.remove(diff_unemp)
-
-#Testing the diff data
-
-tseries::adf.test(diff_unemp)#ADF TEST
-tseries::adf.test(diff_unemp, k =0)#DF TEST
-tseries::pp.test(diff_unemp)#PP TEST
-#Rejected for all. Hence this is stationary
-
-#Now unemployment time series is also stationary
-
-plot.ts(cbind(diff_unemp, ts_inf), plot.type = 'single', col=c('blue','red'))
-
-plot.ts(cbind(diff_unemp,ts_unemp), plot.type = 'single', col = c('red','blue'))
+adf.test(cpi_deseas_diff)
+#Looking at these plots
+plot.ts(cpi_diff1)
+plot.ts(cpi_deseas_diff)
 
 
 
 
-
-#AUTOCORRELATION
-
-#Inflation data
-acf(x = ts_inf) #Shows in fraction of years. So 0.5 means 6 months, 1 means a year and so on.
-pacf(x = ts_inf)
-
-Acf(ts_inf[1:length(ts_inf)], lag.max = 100) #This would depict the same but inn integers or in number of months
-pacf(ts_inf[1:length(ts_inf)], lag.max = 100)
-
-#Can also do
-ggAcf(ts_inf, lag.max = 100)
+#Looking at ACF
+Acf(cpi)
+#Most probably a first lag. Geometric plots often sign of AR 1 process
+#Further look at pacf
+pacf(cpi)
+#Now clear that it is the effect of the first lag. Other were due to the combined effect
 
 
-
-#Suppose did the same for cpi data
-Acf(ts_inf[1:length(ts_cpi)], lag.max = 100, na.action = na.pass) 
-pacf(ts_inf[1:length(ts_cpi)], lag.max = 100, na.action = na.pass)
-#Will find no change. Same as inflation rates 
+#Taking a look at the differenced data of cpi
+Acf(cpi_diff1, lag.max = 100)
+Pacf(cpi_diff1, lag.max = 100)
+#Here there is a significant positive correlation in a 1 period lag and negative in 2 month lag. 
+#Large correlation in ACF and PACF for 1 period lag
 
 
 
-#For unemployment would be using  the diff data which is stationary
-Acf(diff_unemp[1:length(diff_unemp)], lag.max = 84)[1:20] 
-ggAcf(diff_unemp, lag.max = 84)
-pacf(diff_unemp[1:length(diff_unemp)], lag.max = 84)
 
-#NOTE: By using Acf rather  than acf, remove zero lag. 
+#Now, we'll move to working on the inflation data
+
+inf <- ts(data1$inf, start = c(2000,1), end = c(2021,4), frequency = 12)
+
+#Looking at its plot
+plot.ts(inf)
+#Note that it shows quite a similar pattern as that of differenced CPI data
+
+#Similar to CPI, form a moving average for inflation
+data1$inf_ma_year <- ma(data1$inf, order = 12)
+
+#Make a time series for the moving average also
+inf_ma <- ts(data1$inf_ma_year, start = c(2000,1), end = c(2021,4), frequency = 12)
+
+plot.ts(inf_ma)
+
+#Plotting them together
+
+plot.ts(cbind(inf,inf_ma), plot.type = 'single', col = c('red','blue'))
+legend('topleft', legend = c('Inflation Rate', 'Inflation Yearly MA'),
+       col = c('red','blue'), lty = 1 )
+
+#DECOMPOSITION
+decomp_inf = stl(na.omit(inf), "periodic")
+plot(decomp_inf)
+
+apply(stl(na.omit(inf), 'periodic')$time, 2, var)/var(na.omit(inf))
+#Now a large portion is explained by random fluctuations
+
+
+#Also take the deseasonalised data
+deseason_inf <- seasadj(decomp_inf)
+
+apply(stl(deseason_inf, 'periodic')$time, 2, var)/var(deseason_inf)
+#Here, random fluctuations again account for most of the variations
+
+plot(stl(deseason_inf,"periodic"))
+
+
+
+
+#STATIONARITY
+adf.test(na.omit(inf))
+#It is sttionary already
+
+
+#ACF & PACF Plots
+
+Acf(inf)
+pacf(na.omit(inf))
+#As expected similar to that of CPI differenced data since both measuring change
+
+
+
+#One thing we left out. What happens when we look at ACF of deasonalized data
+
+
+
+#                     UNEMPLOYMENT RATES
+
+unemp <- ts(data1$unemp, start = c(2000,1), end = c(2021,4), frequency = 12)
+
+#Looking at its plot
+plot.ts(unemp)
+#Huge incrceases in 2009-10 and 2020. Indicative of GFC and Covid
+
+#Moving average
+data1$unemp_ma_year <- ma(data1$unemp, order = 12)
+
+#Make a time series for the moving average also
+unemp_ma <- ts(data1$unemp_ma_year, start = c(2000,1), end = c(2021,4), frequency = 12)
+
+plot.ts(unemp_ma)
+
+#Plotting them together
+
+plot.ts(cbind(unemp,unemp_ma), plot.type = 'single', col = c('red','blue'))
+legend('topleft', legend = c('Unemployment Rate', 'Unemployment Yearly MA'),
+       col = c('red','blue'), lty = 1 )
+
+#DECOMPOSITION
+decomp_unemp = stl(unemp, "periodic")
+plot(decomp_inf)
+
+apply(stl(na.omit(inf), 'periodic')$time, 2, var)/var(na.omit(inf))
+#Now a large portion is explained by random fluctuations
+
+
+#Also take the deseasonalised data
+deseason_unemp <- seasadj(decomp_unemp)
+
+apply(stl(deseason_inf, 'periodic')$time, 2, var)/var(deseason_inf)
+#Here, random fluctuations again account for most of the variations
+
+plot(stl(deseason_inf,"periodic"))
+
+
+
+
+#STATIONARITY
+adf.test(unemp)
+#The unemployment rates do not come out to be stationary.
+#Will need to takae difference
+unemp_diff1 <- diff(unemp, differences = 1)
+plot.ts(unemp_diff1)
+#This actually shows changes in unemployment rates each month
+
+adf.test(unemp_diff1)
+
+#ACF & PACF Plots
+
+Acf(unemp)
+pacf(unemp)
+#Highly correlated with 1 period lag
+
+Acf(unemp_diff1)
+pacf(unemp_diff1)
+#None of the differenced data comes out to be significant
